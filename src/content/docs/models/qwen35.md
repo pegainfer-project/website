@@ -90,12 +90,53 @@ Poisson arrivals (`QPS n`) and fixed in-flight concurrency (`c=N`):
 Single-stream decode (`c=1`) runs at 12.2 ms/token — about 82 tok/s per
 request. All rows completed every request at the full 128-token output.
 
+### Qwen3.5-9B Serving Load
+
+Measured on **1x GH200 120GB** (aarch64, sm_90), pegainfer main `ffb959c4`, Qwen3.5-9B BF16, TP1, CUDA Graph decode on. Load to HTTP-ready is 5.6 s warm; on current main the load-time budget is 58.8 GB of paged KV (117651 pages) plus a 6.3 GB recurrent-state reserve for the default 64 decode slots. Bench: the Python `vllm bench serve` client, random dataset, 1024-token prompts, 128-token outputs, greedy, default seed.
+
+| load | req/s | out tok/s | TTFT p50 / p99 | TPOT p50 / p99 |
+| ---: | ---: | ---: | ---: | ---: |
+| c=1 | 1.02 | 131 | 51 / 55 ms | 7.3 / 7.3 ms |
+| QPS 1 | 0.95 | 122 | 59 / 91 ms | 7.9 / 10.1 ms |
+| QPS 2 | 1.86 | 238 | 62 / 137 ms | 9.8 / 12.2 ms |
+| c=4 | 2.75 | 352 | 64 / 794 ms | 10.4 / 10.4 ms |
+| QPS 4 | 3.58 | 459 | 70 / 174 ms | 15.5 / 22.2 ms |
+| c=8 | 4.03 | 516 | 110 / 1135 ms | 14.0 / 14.4 ms |
+| QPS 8 | 5.69 | 729 | 366 / 2546 ms | 60.3 / 70.9 ms |
+| QPS 10 | 6.33 | 806 | 1.3 / 5.4 s | 66.7 / 70.3 ms |
+| QPS 12 | 6.48 | 830 | 4.5 / 8.0 s | 68.9 / 70.0 ms |
+| QPS 16 | 6.70 | 857 | 6.4 / 16.0 s | 68.7 / 70.0 ms |
+
+The single GPU saturates around 6.7 req/s and ~857 output tok/s at this shape. Long-context at in=4097 / out=32, c=1 holds TTFT p50 at 194 ms; a c=120 overload with 4096-token prompts completes 120/120 with no OOM — TTFT there is pure queueing. A retest with the recurrent-state reserve and decodable-vocab selection fixes (both on current main) reproduced the sweep within run-to-run variance. A `get_weather` tool-call round-trip through `/v1/chat/completions` returns well-formed `tool_calls`.
+
+Greedy output matches HF `transformers` (bf16, same GPU) token-for-token on 5 of 6 test prompts over the first 20 tokens; the sixth flips at a near-tie logit position around token 13. The per-size HF logits golden gate passes (mean logit delta 0.022–0.024, p99 ≤ 0.090).
+
+### Qwen3.5-27B Serving Load
+
+Measured on **1x GH200 120GB** (aarch64, sm_90), Qwen3.5-27B BF16, TP1, CUDA Graph decode on — pegainfer `ffb959c4` plus the recurrent-state admission reserve and decodable-vocab selection fixes, both since merged to main. Load to HTTP-ready is 5.6 s warm. The load-time budget is 17.2 GB of paged KV, a 5.5 GB prefill-scratch reserve, and an 18.8 GB recurrent-state reserve — two ~147 MB linear-attention states budgeted per decode slot across the full 64-slot capacity. Same client and workload as the 9B section.
+
+| load | req/s | out tok/s | TTFT p50 / p99 | TPOT p50 / p99 |
+| ---: | ---: | ---: | ---: | ---: |
+| c=1 | 0.37 | 47 | 159 / 173 ms | 20.3 / 20.3 ms |
+| QPS 1 | 0.87 | 112 | 219 / 511 ms | 29.2 / 32.9 ms |
+| QPS 2 | 1.57 | 201 | 225 / 709 ms | 43.2 / 50.1 ms |
+| c=4 | 1.02 | 131 | 211 / 1309 ms | 28.3 / 28.5 ms |
+| QPS 4 | 2.33 | 299 | 383 / 1234 ms | 107.5 / 124.3 ms |
+| c=8 | 1.55 | 198 | 339 / 1495 ms | 37.5 / 39.1 ms |
+| c=32 | 2.35 | 301 | 0.7 / 6.5 s | 96.3 / 98.7 ms |
+| c=48 | 2.48 | 318 | 0.9 / 10.1 s | 134.5 / 140.7 ms |
+| QPS 8 | 2.62 | 336 | 4.7 / 22.4 s | 164.5 / 180.0 ms |
+| QPS 10 | 2.58 | 331 | 17.0 / 36.1 s | 175.1 / 185.0 ms |
+| QPS 12 | 2.64 | 338 | 20.9 / 42.8 s | 177.5 / 185.0 ms |
+| QPS 16 | 2.67 | 342 | 27.5 / 66.2 s | 179.8 / 184.6 ms |
+
+The single GPU saturates around 2.7 req/s and ~340 output tok/s at this shape; past QPS 8 throughput is flat and TTFT grows with queueing. Long-context at in=4097 / out=32, c=1 holds TTFT p50 at 587 ms; a c=120 overload with 4096-token prompts completes 120/120 with zero server-side errors. A `get_weather` tool-call round-trip returns well-formed `tool_calls`.
+
+Greedy output matches HF `transformers` (bf16, same GPU) token-for-token on 4 of 6 test prompts over the first 20 tokens, with flips at near-tie logit positions. The per-size HF logits golden gate passes (mean logit delta 0.020–0.022, max 0.206).
+
 ## Notes
 
-- Only the 8 full-attention layers keep a paged KV cache; the 24
-  linear-attention layers carry a fixed-size per-request state, so KV
-  memory grows with context length at 1/4 the rate of a full-attention
-  stack.
-- CUDA Graph decode is on by default; disable with `--cuda-graph=false`
-  for debugging. Greedy and sampled decoding are supported; prefix
-  caching is not yet wired up for the hybrid KV/recurrent state.
+- Only the full-attention layers (1 in 4) keep a paged KV cache; the linear-attention layers carry a fixed-size per-request recurrent state (~49 MB at 9B, ~147 MB at 27B), so KV memory grows with context length at 1/4 the rate of a full-attention stack.
+- The recurrent state is reserved at load for the full decode-batch capacity, ahead of KV-pool sizing — at 27B, 18.8 GB for the default 64 decode slots (two ~147 MB states per slot). `--max-batch` (one of 1/2/4/8/16/32/64) lowers that capacity and hands most of the freed reserve back to KV-pool sizing on tighter-VRAM GPUs.
+- Token selection is bounded to the tokenizer-decodable vocab (248077 ids; the checkpoint pads `lm_head` to 248320), so sampling never lands on an id the tokenizer cannot decode.
+- CUDA Graph decode is always on for Qwen3.5 — the batched decode path is built around graph replay, and the server rejects `--cuda-graph=false`. Greedy and sampled decoding are supported; prefix caching is not yet wired up for the hybrid KV/recurrent state.
