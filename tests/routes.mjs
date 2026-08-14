@@ -10,6 +10,7 @@ export const SITE_ROUTES = [
 	'/blog/green-ctx/',
 	'/models/qwen3-4b/',
 	'/models/qwen35/',
+	'/models/glm52/',
 ];
 
 export const DIST_PAGES = [
@@ -24,6 +25,7 @@ export const DIST_PAGES = [
 	'blog/green-ctx/index.html',
 	'models/qwen3-4b/index.html',
 	'models/qwen35/index.html',
+	'models/glm52/index.html',
 ];
 
 export const REDIRECTS = [
