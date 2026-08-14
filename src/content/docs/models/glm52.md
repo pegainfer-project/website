@@ -86,10 +86,10 @@ hosting its local ranks:
 ```bash
 # node 0 of 4 (EP16) — binds the one-time bootstrap rendezvous
 target/release/pegainfer-server ... --moe-topo ep16 \
-  --glm52-ranks 0..4 --glm52-rendezvous node0:19200
+  --glm52-ranks 0..4 --glm52-rendezvous <node0>:19200
 # node 1
 target/release/pegainfer-server ... --moe-topo ep16 \
-  --glm52-ranks 4..8 --glm52-rendezvous node0:19200
+  --glm52-ranks 4..8 --glm52-rendezvous <node0>:19200
 ```
 
 ## Native MTP
@@ -154,9 +154,9 @@ target/release/pegainfer-server \
   --glm52-native-mtp --glm52-weight-staging \
   --max-model-len 131072 \
   --kv-offload --kv-offload-host-gib 640 \
-  --kv-p2p-metaserver-addr http://METASERVER_IP:20056 \
-  --kv-p2p-advertise-addr THIS_NODE_IP:20103 \
-  --kv-p2p-nics mlx5_bond_0
+  --kv-p2p-metaserver-addr http://<metaserver-ip>:20056 \
+  --kv-p2p-advertise-addr <this-node-ip>:20103 \
+  --kv-p2p-nics <rdma-nic>
 ```
 
 Decode node (4 GPUs, EP4):
@@ -169,9 +169,9 @@ target/release/pegainfer-server \
   --glm52-native-mtp --glm52-weight-staging \
   --max-model-len 131072 \
   --kv-offload --kv-offload-host-gib 600 \
-  --kv-p2p-metaserver-addr http://METASERVER_IP:20056 \
-  --kv-p2p-advertise-addr THIS_NODE_IP:20114 \
-  --kv-p2p-nics mlx5_bond_0
+  --kv-p2p-metaserver-addr http://<metaserver-ip>:20056 \
+  --kv-p2p-advertise-addr <this-node-ip>:20114 \
+  --kv-p2p-nics <rdma-nic>
 ```
 
 `--kv-p2p-advertise-addr` must be a literal `ip:port` reachable from
@@ -197,8 +197,8 @@ so NIXL-aware routers work unchanged. A minimal single-file proxy
 
 ```bash
 python3 pd_proxy.py --port 10001 \
-  --prefill http://PREFILL_NODE:8000 \
-  --decode http://DECODE_NODE:8000
+  --prefill http://<prefill-node>:8000 \
+  --decode http://<decode-node>:8000
 ```
 
 <details>
@@ -225,7 +225,7 @@ decode side asserts it tokenizes to the same committed length.
 
 Usage:
   python3 pd_proxy.py --port 10001 \
-    --prefill http://prefill-node:8000 --decode http://decode-node:8000
+    --prefill http://<prefill-node>:8000 --decode http://<decode-node>:8000
 """
 
 import argparse
