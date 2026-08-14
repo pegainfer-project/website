@@ -18,8 +18,8 @@ A from-scratch LLM inference engine in pure Rust + CUDA. OpenAI-compatible. Serv
 ## Highlights
 
 - **No Python at runtime** — no PyTorch, no ONNX, no framework in the serving path.
-- **Five model lines**, one engine each — Qwen3 through Kimi-K2.
-- **Up to 8-GPU expert parallelism** for large MoE deployments.
+- **Model lines from 4B dense to trillion-parameter MoE** — Qwen3 through Kimi-K2 and GLM-5.2, one engine each.
+- **Multi-node expert parallelism and P/D disaggregation** for large MoE deployments.
 - **OpenAI-compatible API** — point any SDK at `http://localhost:8000/v1`.
 
 See the [getting started guide](/getting-started/) or the [GitHub repository](https://github.com/pegainfer-project/pegainfer).
