@@ -14,21 +14,21 @@ GLM-5.2 support is Blackwell-only (compute capability ≥ 10.0); launch
 fails closed on older GPUs. Everything on this page was run on GB300
 nodes with 4 GPUs and an RDMA NIC each.
 
-## Topologies
+## Deployment shape
 
-GLM-5.2 is launched with a MoE sharding topology, selected by
-`--moe-topo`:
+The recommended deployment is [P/D disaggregated](#pd-disaggregation):
+prefill and decode run on separate nodes, connected by a KV handoff.
+`--moe-topo` selects each side's sharding:
 
-| `--moe-topo` | GPUs | Role |
-| --- | ---: | --- |
-| `ep4` | 4 | Decode + co-located prefill on one 4-GPU node (64 experts per rank) |
-| `ep8` (default) | 8 | Decode + co-located prefill across 8 GPUs (32 experts per rank) |
-| `ep16` … `ep64` | 16–64 | Multi-node decode within one NVLink domain (`--glm52-ranks` + `--glm52-rendezvous`) |
-| `tp4` | 4 | Prefill-only tensor parallel, requires `--glm52-prefill-only` — the P side of a P/D deployment |
+- **Prefill** — `--moe-topo tp4 --glm52-prefill-only`: 4-GPU tensor
+  parallel, computes prompt KV and the initial tokens, then hands off.
+- **Decode** — `--moe-topo epN` (expert parallelism): the 256 experts
+  shard across N ranks, from `ep4` (one 4-GPU node) up to `ep64`
+  within one NVLink domain.
 
-Every EP topology serves complete requests on its own. TP4 is
-prefill-only: it computes prompt KV and hands off to an EP decode
-instance (see [P/D disaggregation](#pd-disaggregation)).
+An EP instance also serves complete requests on its own, with prefill
+co-located — the simplest way to bring the model up, at a decode
+throughput cost under load (see [Performance](#performance)).
 
 ## Build
 
@@ -70,16 +70,8 @@ target/release/pegainfer-server \
   --max-model-len 131072
 ```
 
-Set `EP_DISABLE_GIN=1` on machines without an RDMA NIC — the NCCL GIN
-probe fails at startup otherwise. `--max-model-len` caps the
-per-request context: pass it explicitly. When omitted, GLM5.2 derives
-a cap from the VRAM left after weight loading, and on the current
-build that auto-derived path can over-commit VRAM and fail EP4 startup
-with CUDA out-of-memory. `--glm52-weight-staging` stages checkpoint
-bytes through pinned buffers and substantially speeds up warm
-restarts; leave it off for a cold start from a network filesystem.
-
-The server exposes the OpenAI API:
+Pass `--max-model-len` explicitly; flag details are under
+[Notes](#notes). The server exposes the OpenAI API:
 
 ```bash
 curl -s http://localhost:8000/v1/chat/completions \
@@ -446,6 +438,14 @@ TPOT).
 
 ## Notes
 
+- `--max-model-len`: pass it explicitly. When omitted, GLM5.2 derives
+  the cap from post-weight-load VRAM, and on the current build that
+  path can over-commit and fail EP4 startup with CUDA out-of-memory.
+- `EP_DISABLE_GIN=1` on machines without an RDMA NIC — the NCCL GIN
+  probe fails at startup otherwise.
+- `--glm52-weight-staging` stages checkpoint bytes through pinned
+  buffers and speeds up warm restarts; leave it off for a cold start
+  from a network filesystem.
 - Prefix caching is on by default and works across P/D turns: repeat
   turns of a conversation reuse prompt KV instead of re-prefilling the
   history.
