@@ -31,7 +31,7 @@ const copy = Buffer.from(`
 		<text x="530" y="395" fill="#cbd5e1" font-family="Arial, Helvetica, sans-serif"
 			font-size="32" font-weight="400">LLM Inference Engine</text>
 		<text x="530" y="478" fill="#7dd3fc" font-family="Arial, Helvetica, sans-serif"
-			font-size="22" font-weight="700" letter-spacing="2">OPEN-INFER.ORG</text>
+			font-size="22" font-weight="700" letter-spacing="2">PEGAINFER.ORG</text>
 	</svg>
 `);
 
