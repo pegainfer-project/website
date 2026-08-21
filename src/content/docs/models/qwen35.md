@@ -127,9 +127,8 @@ request. All rows completed every request at the full 128-token output.
 All four sizes were measured on **1x GH200 120GB** (aarch64, sm_90), BF16,
 TP1, with random 1024-token prompts and 128-token greedy outputs. The 0.8B
 and 2B runs used pegainfer main `aea46ed` and `vllm bench serve` 0.23.0
-with range ratio 0 and no seed. The 9B and 27B runs used `ffb959c4` plus
-the subsequently merged recurrent-state admission and decodable-vocab
-fixes, with the benchmark client's default seed.
+with range ratio 0 and no seed. The 9B and 27B runs used `ffb959c4` and the
+benchmark client's default seed.
 
 #### Qwen3.5-0.8B
 
@@ -191,26 +190,24 @@ untested GDN expansion-factor-1 path.
 
 #### Qwen3.5-9B
 
-Load to HTTP-ready is 5.6 s warm. On the fixed tree, the load-time budget
-is 58.8 GB of paged KV (117651 pages) plus a 6.3 GB recurrent-state reserve
-for the default 64 decode slots.
+Load to HTTP-ready is 5.6 s warm.
 
 | load | req/s | out tok/s | TTFT p50 / p99 | TPOT p50 / p99 |
 | ---: | ---: | ---: | ---: | ---: |
 | c=1 | 1.02 | 131 | 51 / 55 ms | 7.3 / 7.3 ms |
+| c=4 | 2.75 | 352 | 64 / 794 ms | 10.4 / 10.4 ms |
+| c=8 | 4.03 | 516 | 110 / 1135 ms | 14.0 / 14.4 ms |
 | QPS 1 | 0.95 | 122 | 59 / 91 ms | 7.9 / 10.1 ms |
 | QPS 2 | 1.86 | 238 | 62 / 137 ms | 9.8 / 12.2 ms |
-| c=4 | 2.75 | 352 | 64 / 794 ms | 10.4 / 10.4 ms |
 | QPS 4 | 3.58 | 459 | 70 / 174 ms | 15.5 / 22.2 ms |
-| c=8 | 4.03 | 516 | 110 / 1135 ms | 14.0 / 14.4 ms |
 | QPS 8 | 5.69 | 729 | 366 / 2546 ms | 60.3 / 70.9 ms |
 | QPS 10 | 6.33 | 806 | 1.3 / 5.4 s | 66.7 / 70.3 ms |
 | QPS 12 | 6.48 | 830 | 4.5 / 8.0 s | 68.9 / 70.0 ms |
 | QPS 16 | 6.70 | 857 | 6.4 / 16.0 s | 68.7 / 70.0 ms |
 
-The single GPU saturates around 6.7 req/s and ~857 output tok/s at this shape. Long-context at in=4097 / out=32, c=1 holds TTFT p50 at 194 ms; a c=120 overload with 4096-token prompts completes 120/120 with no OOM — TTFT there is pure queueing. A retest with the recurrent-state reserve and decodable-vocab selection fixes (both on current main) reproduced the sweep within run-to-run variance. A `get_weather` tool-call round-trip through `/v1/chat/completions` returns well-formed `tool_calls`.
+The single GPU saturates around 6.7 req/s and ~857 output tok/s at this shape. Long-context at in=4097 / out=32, c=1 holds TTFT p50 at 194 ms; a c=120 overload with 4096-token prompts completes 120/120 with no OOM — TTFT there is pure queueing. A `get_weather` tool-call round-trip through `/v1/chat/completions` returns well-formed `tool_calls`.
 
-Greedy output matches HF `transformers` (bf16, same GPU) token-for-token on 5 of 6 test prompts over the first 20 tokens; the sixth flips at a near-tie logit position around token 13. The per-size HF logits golden gate passes (mean logit delta 0.022–0.024, p99 ≤ 0.090).
+Greedy output matches HF `transformers` (bf16, same GPU) token-for-token on 5 of 6 test prompts over the first 20 tokens; the sixth flips at around token 13. The per-size HF logits golden gate passes (mean logit delta 0.022–0.024, p99 ≤ 0.090).
 
 #### Qwen3.5-27B
 
@@ -222,13 +219,13 @@ full 64-slot capacity.
 | load | req/s | out tok/s | TTFT p50 / p99 | TPOT p50 / p99 |
 | ---: | ---: | ---: | ---: | ---: |
 | c=1 | 0.37 | 47 | 159 / 173 ms | 20.3 / 20.3 ms |
-| QPS 1 | 0.87 | 112 | 219 / 511 ms | 29.2 / 32.9 ms |
-| QPS 2 | 1.57 | 201 | 225 / 709 ms | 43.2 / 50.1 ms |
 | c=4 | 1.02 | 131 | 211 / 1309 ms | 28.3 / 28.5 ms |
-| QPS 4 | 2.33 | 299 | 383 / 1234 ms | 107.5 / 124.3 ms |
 | c=8 | 1.55 | 198 | 339 / 1495 ms | 37.5 / 39.1 ms |
 | c=32 | 2.35 | 301 | 0.7 / 6.5 s | 96.3 / 98.7 ms |
 | c=48 | 2.48 | 318 | 0.9 / 10.1 s | 134.5 / 140.7 ms |
+| QPS 1 | 0.87 | 112 | 219 / 511 ms | 29.2 / 32.9 ms |
+| QPS 2 | 1.57 | 201 | 225 / 709 ms | 43.2 / 50.1 ms |
+| QPS 4 | 2.33 | 299 | 383 / 1234 ms | 107.5 / 124.3 ms |
 | QPS 8 | 2.62 | 336 | 4.7 / 22.4 s | 164.5 / 180.0 ms |
 | QPS 10 | 2.58 | 331 | 17.0 / 36.1 s | 175.1 / 185.0 ms |
 | QPS 12 | 2.64 | 338 | 20.9 / 42.8 s | 177.5 / 185.0 ms |
@@ -241,6 +238,6 @@ Greedy output matches HF `transformers` (bf16, same GPU) token-for-token on 4 of
 ## Notes
 
 - Only the full-attention layers (1 in 4) keep a paged KV cache; the linear-attention layers carry a fixed-size per-request recurrent state (~49 MB at 9B, ~147 MB at 27B), so KV memory grows with context length at 1/4 the rate of a full-attention stack.
-- The recurrent state is reserved at load for the full decode-batch capacity, ahead of KV-pool sizing — at 27B, 18.8 GB for the default 64 decode slots (two ~147 MB states per slot). `--max-batch` (one of 1/2/4/8/16/32/64) lowers that capacity and hands most of the freed reserve back to KV-pool sizing on tighter-VRAM GPUs.
+- The recurrent state is reserved at load for the full decode-batch capacity, ahead of KV-pool sizing — at 27B, 18.8 GB for the default 64 decode slots (two ~147 MB states per slot). `--max-batch` (1..=64, default 64) lowers that capacity and hands most of the freed reserve back to KV-pool sizing on tighter-VRAM GPUs.
 - Token selection is bounded to the tokenizer-decodable vocab (248077 ids; the checkpoint pads `lm_head` to 248320), so sampling never lands on an id the tokenizer cannot decode.
 - CUDA Graph decode is always on for Qwen3.5 — the batched decode path is built around graph replay, and the server rejects `--cuda-graph=false`. Greedy and sampled decoding are supported; prefix caching is not yet wired up for the hybrid KV/recurrent state.
