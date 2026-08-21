@@ -124,7 +124,7 @@ Tool calling goes through `/v1/chat/completions` with a `tools` array; a
 
 ## Performance
 
-Two benchmark suites are reported below: an engine comparison against vLLM on a consumer RTX 5090, and GH200 family benchmarks covering all six dense sizes.
+Two serving-benchmark suites are reported below — an engine comparison against vLLM on a consumer RTX 5090, and GH200 family benchmarks covering all six dense sizes — followed by KV offload and speculative-decoding results.
 
 ### RTX 5090: pegainfer vs vLLM
 
@@ -211,14 +211,17 @@ could not reuse prefixes cached by an earlier point. Their low-load p99
 therefore includes first-use process costs. `c=N` holds N requests in
 flight; `QPS n` uses Poisson arrivals.
 
-| Model | Decode path | High-load throughput | Queueing knee |
-| --- | --- | ---: | ---: |
-| 0.6B | CUDA Graph | 2.8k tok/s at c=8 | not reached by QPS 16 |
-| 1.7B | CUDA Graph | 2.1k tok/s at c=8 | not reached by QPS 16 |
-| 4B | CUDA Graph | ≥3.7k tok/s, still rising | QPS 24→32 |
-| 8B | CUDA Graph | ~2.6k tok/s plateau | QPS 20→24 |
-| 14B | batched eager reroute | ~1.5k tok/s plateau | QPS 12→16 |
-| 32B | CUDA Graph | ~660–675 tok/s plateau | QPS 4→6 |
+The `c=8` column is the one measured at the same load for all six sizes.
+The 0.6B and 1.7B ladders stop at QPS 16; 4B through 32B run to QPS 32.
+
+| Model | Decode path | c=8 out tok/s | Saturation | Queueing knee |
+| --- | --- | ---: | ---: | ---: |
+| 0.6B | CUDA Graph | 2805 | not reached | not reached |
+| 1.7B | CUDA Graph | 2094 | not reached | not reached |
+| 4B | CUDA Graph | 1204 | not reached, ≥3.7k tok/s at QPS 32 | QPS 24→32 |
+| 8B | CUDA Graph | 836 | ~2.6k tok/s | QPS 20→24 |
+| 14B | batched eager reroute | 504 | ~1.5k tok/s | QPS 12→16 |
+| 32B | CUDA Graph | 253 | ~660–675 tok/s | QPS 4→6 |
 
 #### Qwen3-0.6B
 
@@ -243,10 +246,10 @@ long-context run completes 4/4 with TTFT p50 36.7 ms. Under c=120 with
 4096-token prompts, 120/120 requests complete with TTFT p50 2.86 s, TPOT
 p50 15.0 ms, and no server errors.
 
-The HF logits golden gate passes all six execution paths (mean error 0.0387,
-p99 0.136, max 0.498). Greedy output is token-identical to HF on 2/6
-24-token prompts; the other continuations remain coherent. Tool calling
-returns a valid `get_weather` call.
+The HF logits golden gate passes all six execution paths (sequential bs=1
+eager: mean 0.0387, p99 0.136, max 0.498). Greedy output is token-identical
+to HF on 2/6 24-token prompts; the other continuations remain coherent.
+Tool calling returns a valid `get_weather` call.
 
 #### Qwen3-1.7B
 
@@ -270,9 +273,10 @@ QPS 16 is not saturated. A 4097-token long-context run completes 4/4 with
 TTFT p50 46.3 ms. Under c=120, 120/120 requests complete with TTFT p50
 3.48 s, TPOT p50 19.7 ms, no server errors, and no unknown token IDs.
 
-The HF logits golden gate passes all six execution paths (mean error 0.0332,
-p99 0.123, max 0.250). Greedy output is token-identical to HF on 5/6
-24-token prompts. Tool calling returns a valid `get_weather` call.
+The HF logits golden gate passes all six execution paths (sequential bs=1
+eager: mean 0.0332, p99 0.123, max 0.250). Greedy output is token-identical
+to HF on 5/6 24-token prompts. Tool calling returns a valid `get_weather`
+call.
 
 #### Qwen3-4B
 
@@ -326,7 +330,7 @@ Throughput saturates around 20 req/s and ~2.6k out tok/s — QPS 24–32 hold 25
 
 #### Qwen3-14B
 
-Decode runs on the batched eager reroute (no CUDA Graph at this size). Load to HTTP-ready is 8.7 s; the profiled KV budget is 57.5 GB (23020 blocks).
+Decode runs on the batched eager reroute (no CUDA Graph at this size). Load to HTTP-ready is 8.7 s warm; the profiled KV budget is 57.5 GB (23020 blocks).
 
 | load | req/s | out tok/s | TTFT p50 / p99 | TPOT p50 / p99 |
 | ---: | ---: | ---: | ---: | ---: |
@@ -350,7 +354,7 @@ Decode runs on the batched eager reroute (no CUDA Graph at this size). Load to H
 
 The eager batched-decode path saturates around 12 req/s and ~1.5k out tok/s — QPS 16–32 hold 1475–1553 tok/s while TTFT grows with queueing, and c=64 lands on the same plateau. The interactive band ends around QPS 10–12, where TPOT p50 crosses from 28 to 42 ms.
 
-From the earlier `ffb959c4` sweep on the same GPU class: long-context at in=4097 / out=32, c=1 holds TTFT p50 at 224 ms; a c=120 overload with 4096-token prompts (~507k aggregate demanded tokens against the 23020-block pool) completes 120/120 with zero server-side errors; a `get_weather` tool-call round-trip returns well-formed `tool_calls`. Greedy output matches HF `transformers` (bf16, same GPU class) token-for-token on 4 of 6 test prompts over the first 20 tokens, with both flips at near-tie logit positions — one conspicuous completion, web-forum mimicry on a malformed arithmetic prompt, is token-for-token identical in HF. The per-size HF logits golden gate passes at 14B.
+From the earlier `ffb959c4` sweep on the same GPU class: long-context at in=4097 / out=32, c=1 holds TTFT p50 at 224 ms; a c=120 overload with 4096-token prompts (~507k aggregate demanded tokens against the 23020-block pool) completes 120/120 with zero server-side errors; a `get_weather` tool-call round-trip returns well-formed `tool_calls`. Greedy output matches HF `transformers` (bf16, same GPU class) token-for-token on 4 of 6 test prompts over the first 20 tokens. One conspicuous completion, web-forum mimicry on a malformed arithmetic prompt, is token-for-token identical in HF. The per-size HF logits golden gate passes at 14B.
 
 #### Qwen3-32B
 

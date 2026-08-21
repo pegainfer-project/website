@@ -195,7 +195,7 @@ header.header {
 	font-size: 0.9375rem;
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 72rem) {
 	.sl-markdown-content table {
 		display: block;
 		overflow-x: auto;
