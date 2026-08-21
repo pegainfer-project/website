@@ -1,19 +1,21 @@
 ---
-title: Qwen3-4B / 8B / 14B / 32B
-description: "Running Qwen3-4B, 8B, 14B, and 32B on pegainfer: launch, serving performance, speculative decoding, and architecture notes."
+title: Qwen3 Dense
+description: "Running Qwen3 Dense on pegainfer: supported sizes, launch, serving performance, speculative decoding, and architecture notes."
 tableOfContents:
   minHeadingLevel: 2
   maxHeadingLevel: 4
 ---
 
-The Qwen3 dense family — 4B, 8B, 14B, and 32B — is the default pegainfer
-model line: pure Rust + CUDA, no Python at build time or runtime,
+The complete Qwen3 dense family — 0.6B, 1.7B, 4B, 8B, 14B, and 32B — is
+the default pegainfer model line: pure Rust + CUDA, no Python at build time or runtime,
 full-attention GQA, paged KV cache, prefix caching, CUDA Graph decode,
 optional pegaflow KV offload, and DSpark speculative decoding.
 
 ## Launch
 
 From the pegainfer workspace root:
+
+### Qwen3-4B
 
 ```bash
 huggingface-cli download Qwen/Qwen3-4B --local-dir models/Qwen3-4B
@@ -65,6 +67,22 @@ cargo run --release -- \
   --dflash-draft-model-path models/dspark_qwen3_4b_block7
 ```
 
+### Qwen3-0.6B
+
+```bash
+huggingface-cli download Qwen/Qwen3-0.6B --local-dir models/Qwen3-0.6B
+
+cargo run --release -- --model-path models/Qwen3-0.6B
+```
+
+### Qwen3-1.7B
+
+```bash
+huggingface-cli download Qwen/Qwen3-1.7B --local-dir models/Qwen3-1.7B
+
+cargo run --release -- --model-path models/Qwen3-1.7B
+```
+
 ### Qwen3-8B
 
 Qwen3-8B uses the same architecture (4096 hidden, 12288 intermediate, 36
@@ -106,7 +124,7 @@ Tool calling goes through `/v1/chat/completions` with a `tools` array; a
 
 ## Performance
 
-Two benchmark suites: an engine comparison against vLLM on a consumer RTX 5090, and a cold family-scaling ladder across all four sizes on a GH200.
+Two benchmark suites are reported below: an engine comparison against vLLM on a consumer RTX 5090, and GH200 family benchmarks covering all six dense sizes.
 
 ### RTX 5090: pegainfer vs vLLM
 
@@ -182,16 +200,79 @@ once to populate GPU KV cache, then sent warm:
 pegainfer wins warm TTFT at every measured length; the 16k warm-cache path
 is 3.6× faster than vLLM p50.
 
-### GH200: Cold Family Scaling
+### GH200 Family Benchmarks
 
-Measured on **1x GH200 120GB** (aarch64, sm_90), pegainfer main `c116077b`, BF16, TP1, Python `vllm bench serve` client, random 1024-token prompts, 128-token outputs, greedy, seed 42. Every point runs against a freshly started server, so no point can serve prefixes cached by an earlier one; first requests pay one-time process-cold costs, so read p99 at the low-request-count points (c=1, QPS 1–2) as a first-use tail rather than steady state. `c=N` rows hold N requests in flight; `QPS n` rows are Poisson arrivals. The 4B and 8B ladders are family-scaling anchors next to the RTX 5090 comparison above, not replacements for it.
+All six dense sizes were measured on **1x GH200 120GB** (aarch64, sm_90),
+BF16, TP1, with random 1024-token prompts and 128-token greedy outputs.
+The 0.6B and 1.7B runs used pegainfer main `aea46ed` and `vllm bench serve`
+0.23.0 with range ratio 0 and no seed. The 4B through 32B runs used main
+`c116077b` and seed 42; each benchmark point started a fresh server so it
+could not reuse prefixes cached by an earlier point. Their low-load p99
+therefore includes first-use process costs. `c=N` holds N requests in
+flight; `QPS n` uses Poisson arrivals.
 
 | Model | Decode path | High-load throughput | Queueing knee |
 | --- | --- | ---: | ---: |
+| 0.6B | CUDA Graph | 2.8k tok/s at c=8 | not reached by QPS 16 |
+| 1.7B | CUDA Graph | 2.1k tok/s at c=8 | not reached by QPS 16 |
 | 4B | CUDA Graph | ≥3.7k tok/s, still rising | QPS 24→32 |
 | 8B | CUDA Graph | ~2.6k tok/s plateau | QPS 20→24 |
 | 14B | batched eager reroute | ~1.5k tok/s plateau | QPS 12→16 |
 | 32B | CUDA Graph | ~660–675 tok/s plateau | QPS 4→6 |
+
+#### Qwen3-0.6B
+
+The model loads in 0.12 s and the server is ready in 3.4 s. The profiled KV
+budget is 84885 MiB (48506 blocks).
+
+| load | req/s | out tok/s | TTFT p50 / p99 | TPOT p50 / p99 |
+| ---: | ---: | ---: | ---: | ---: |
+| c=1 | 4.10 | 524 | 12.0 / 22.8 ms | 1.81 / 1.84 ms |
+| c=4 | 11.58 | 1483 | 14.1 / 973 ms | 2.09 / 2.17 ms |
+| c=8 | 21.92 | 2805 | 12.7 / 725 ms | 2.31 / 2.42 ms |
+| QPS 1 | 0.99 | 126 | 9.5 / 19.0 ms | 1.81 / 1.99 ms |
+| QPS 2 | 1.97 | 252 | 9.1 / 16.7 ms | 1.81 / 1.99 ms |
+| QPS 4 | 3.93 | 503 | 9.5 / 105 ms | 1.89 / 2.02 ms |
+| QPS 8 | 7.87 | 1007 | 11.1 / 344 ms | 1.98 / 2.53 ms |
+| QPS 10 | 9.84 | 1260 | 10.4 / 492 ms | 1.99 / 2.26 ms |
+| QPS 12 | 11.35 | 1453 | 10.1 / 835 ms | 2.03 / 2.27 ms |
+| QPS 16 | 14.94 | 1913 | 10.1 / 920 ms | 2.09 / 2.49 ms |
+
+QPS 16 is not saturated; c=8 reaches 2805 output tok/s. A 4097-token
+long-context run completes 4/4 with TTFT p50 36.7 ms. Under c=120 with
+4096-token prompts, 120/120 requests complete with TTFT p50 2.86 s, TPOT
+p50 15.0 ms, and no server errors.
+
+The HF logits golden gate passes all six execution paths (mean error 0.0387,
+p99 0.136, max 0.498). Greedy output is token-identical to HF on 2/6
+24-token prompts; the other continuations remain coherent. Tool calling
+returns a valid `get_weather` call.
+
+#### Qwen3-1.7B
+
+The model loads in 0.25 s and the server is ready in 3.9 s. The profiled KV
+budget is 82714 MiB (47265 blocks).
+
+| load | req/s | out tok/s | TTFT p50 / p99 | TPOT p50 / p99 |
+| ---: | ---: | ---: | ---: | ---: |
+| c=1 | 3.01 | 385 | 16.0 / 21.9 ms | 2.49 / 2.51 ms |
+| c=4 | 8.14 | 1042 | 18.5 / 965 ms | 2.77 / 2.86 ms |
+| c=8 | 16.36 | 2094 | 19.0 / 979 ms | 3.06 / 3.29 ms |
+| QPS 1 | 0.98 | 126 | 9.4 / 15.4 ms | 2.48 / 2.66 ms |
+| QPS 2 | 1.96 | 250 | 10.0 / 17.3 ms | 2.52 / 2.67 ms |
+| QPS 4 | 3.91 | 501 | 10.2 / 14.7 ms | 2.58 / 2.69 ms |
+| QPS 8 | 7.82 | 1001 | 13.1 / 25.6 ms | 2.70 / 3.41 ms |
+| QPS 10 | 9.78 | 1252 | 11.4 / 888 ms | 2.70 / 3.27 ms |
+| QPS 12 | 11.20 | 1434 | 11.5 / 974 ms | 2.73 / 3.14 ms |
+| QPS 16 | 15.02 | 1923 | 11.5 / 760 ms | 2.89 / 3.61 ms |
+
+QPS 16 is not saturated. A 4097-token long-context run completes 4/4 with
+TTFT p50 46.3 ms. Under c=120, 120/120 requests complete with TTFT p50
+3.48 s, TPOT p50 19.7 ms, no server errors, and no unknown token IDs.
+
+The HF logits golden gate passes all six execution paths (mean error 0.0332,
+p99 0.123, max 0.250). Greedy output is token-identical to HF on 5/6
+24-token prompts. Tool calling returns a valid `get_weather` call.
 
 #### Qwen3-4B
 
