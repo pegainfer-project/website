@@ -11,6 +11,7 @@ export const SITE_ROUTES = [
 	'/models/qwen3-4b/',
 	'/models/qwen35/',
 	'/models/glm52/',
+	'/models/gemma4/',
 ];
 
 export const DIST_PAGES = [
@@ -26,6 +27,7 @@ export const DIST_PAGES = [
 	'models/qwen3-4b/index.html',
 	'models/qwen35/index.html',
 	'models/glm52/index.html',
+	'models/gemma4/index.html',
 ];
 
 export const REDIRECTS = [

@@ -84,7 +84,8 @@ Decode is captured as a CUDA graph with pre-allocated buffers, keeping per-token
 | Model | Architecture |
 | --- | --- |
 | [Qwen3 Dense](/models/qwen3-4b/) | Full attention, tensor parallel |
-| Qwen3.5-4B | Hybrid: 24 linear + 8 full attention layers |
+| [Qwen3.5 Dense](/models/qwen35/) | Hybrid: 3:1 linear + full attention layers |
 | DeepSeek-V4 | MoE + compressor + indexer, 8-GPU |
 | DeepSeek-V2-Lite | MoE + expert parallelism, 2-GPU |
 | Kimi-K2 | MLA + MoE + Marlin INT4, 8-GPU expert parallelism |
+| [Gemma 4 12B](/models/gemma4/) | Sliding-window local + global attention, dual paged KV |

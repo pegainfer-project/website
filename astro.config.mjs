@@ -119,8 +119,9 @@ export default defineConfig({
 					label: 'Models',
 					items: [
 						{ label: 'Qwen3 Dense', link: '/models/qwen3-4b/' },
-						{ label: 'Qwen3.5-4B / 9B / 27B', link: '/models/qwen35/' },
+						{ label: 'Qwen3.5 Dense', link: '/models/qwen35/' },
 						{ label: 'GLM-5.2', link: '/models/glm52/' },
+						{ label: 'Gemma 4 12B', link: '/models/gemma4/' },
 					],
 				},
 			],
