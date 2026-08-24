@@ -31,14 +31,24 @@ export PEGAINFER_TRITON_PYTHON=.venv/bin/python
 
 From the pegainfer workspace root:
 
-### Qwen3.5-4B
+Choose a supported checkpoint by setting `MODEL` once. All five sizes use the
+same download and launch commands:
 
 ```bash
-huggingface-cli download Qwen/Qwen3.5-4B --local-dir models/Qwen3.5-4B
+MODEL=Qwen3.5-4B
+huggingface-cli download Qwen/$MODEL --local-dir models/$MODEL
 
 export CUDA_HOME=/usr/local/cuda
-cargo run --release --features qwen35 -- --model-path models/Qwen3.5-4B
+cargo run --release --features qwen35 -- --model-path models/$MODEL
 ```
+
+| Size | `MODEL` value |
+| --- | --- |
+| 0.8B | `Qwen3.5-0.8B` |
+| 2B | `Qwen3.5-2B` |
+| 4B | `Qwen3.5-4B` |
+| 9B | `Qwen3.5-9B` |
+| 27B | `Qwen3.5-27B` |
 
 The server exposes an OpenAI-compatible `/v1/completions` endpoint:
 
@@ -59,38 +69,6 @@ curl -N http://localhost:8000/v1/completions \
 The `model` field must match the served model id — by default the
 `--model-path` value, or whatever `--served-model-name` sets
 (`curl http://localhost:8000/v1/models` shows it).
-
-### Qwen3.5-0.8B
-
-```bash
-huggingface-cli download Qwen/Qwen3.5-0.8B --local-dir models/Qwen3.5-0.8B
-
-cargo run --release --features qwen35 -- --model-path models/Qwen3.5-0.8B
-```
-
-### Qwen3.5-2B
-
-```bash
-huggingface-cli download Qwen/Qwen3.5-2B --local-dir models/Qwen3.5-2B
-
-cargo run --release --features qwen35 -- --model-path models/Qwen3.5-2B
-```
-
-### Qwen3.5-9B
-
-```bash
-huggingface-cli download Qwen/Qwen3.5-9B --local-dir models/Qwen3.5-9B
-
-cargo run --release --features qwen35 -- --model-path models/Qwen3.5-9B
-```
-
-### Qwen3.5-27B
-
-```bash
-huggingface-cli download Qwen/Qwen3.5-27B --local-dir models/Qwen3.5-27B
-
-cargo run --release --features qwen35 -- --model-path models/Qwen3.5-27B
-```
 
 All five sizes are gated by the same HF bf16 logits golden tests
 (short prompts plus 4097/8192-token long prompts per size).

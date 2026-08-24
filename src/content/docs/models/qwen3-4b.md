@@ -9,23 +9,37 @@ tableOfContents:
 The complete Qwen3 dense family — 0.6B, 1.7B, 4B, 8B, 14B, and 32B — is
 the default pegainfer model line: pure Rust + CUDA, no Python at build time or runtime,
 full-attention GQA, paged KV cache, prefix caching, CUDA Graph decode,
-optional pegaflow KV offload, and DSpark speculative decoding.
+optional pegaflow KV offload, and DFlash or DSpark speculative decoding for
+Qwen3-4B.
 
 ## Launch
 
 From the pegainfer workspace root:
 
-### Qwen3-4B
+Choose a supported checkpoint by setting `MODEL` once. The same download and
+launch commands work across the family:
 
 ```bash
-huggingface-cli download Qwen/Qwen3-4B --local-dir models/Qwen3-4B
+MODEL=Qwen3-4B
+huggingface-cli download Qwen/$MODEL --local-dir models/$MODEL
 
 export CUDA_HOME=/usr/local/cuda
-cargo run --release
+cargo run --release -- --model-path models/$MODEL
 ```
 
-The default model path is `models/Qwen3-4B`, and `pegainfer-server` is the
-workspace default member. To pass an explicit model path or port:
+`pegainfer-server` is the workspace default member. Qwen3-4B also launches with
+plain `cargo run --release` because its default path is `models/Qwen3-4B`.
+
+| Size | `MODEL` value | Deployment note |
+| --- | --- | --- |
+| 0.6B | `Qwen3-0.6B` | — |
+| 1.7B | `Qwen3-1.7B` | — |
+| 4B | `Qwen3-4B` | Default; DFlash and DSpark support |
+| 8B | `Qwen3-8B` | — |
+| 14B | `Qwen3-14B` | Decode reroutes to batched eager because GQA group 5 has no compiled decode kernel |
+| 32B | `Qwen3-32B` | About 63 GB of BF16 weights; use a large-VRAM GPU |
+
+To change the port:
 
 ```bash
 cargo run --release -p pegainfer-server -- \
@@ -61,57 +75,10 @@ cargo run --release -- \
   --kv-offload-host-gib 16 \
   --no-prefix-cache
 
-# DSpark speculative decoding (greedy, single-GPU)
+# DFlash or DSpark speculative decoding (single-GPU)
 cargo run --release -- \
   --model-path models/Qwen3-4B \
   --dflash-draft-model-path models/dspark_qwen3_4b_block7
-```
-
-### Qwen3-0.6B
-
-```bash
-huggingface-cli download Qwen/Qwen3-0.6B --local-dir models/Qwen3-0.6B
-
-cargo run --release -- --model-path models/Qwen3-0.6B
-```
-
-### Qwen3-1.7B
-
-```bash
-huggingface-cli download Qwen/Qwen3-1.7B --local-dir models/Qwen3-1.7B
-
-cargo run --release -- --model-path models/Qwen3-1.7B
-```
-
-### Qwen3-8B
-
-Qwen3-8B uses the same architecture (4096 hidden, 12288 intermediate, 36
-layers) and runs on the same single GPU — just point `--model-path` at the
-8B weights. No feature flags or build changes needed.
-
-```bash
-cargo run --release -- --model-path models/Qwen3-8B
-```
-
-### Qwen3-14B
-
-Qwen3-14B's GQA group — 40 query heads over 8 KV heads — has no compiled decode kernel, so decode reroutes through the batched eager prefill path (logged as a `WARN` at load). Serving works normally; the trade-off is eager per-step decode, with batched throughput that scales well.
-
-```bash
-huggingface-cli download Qwen/Qwen3-14B --local-dir models/Qwen3-14B
-
-cargo run --release -- --model-path models/Qwen3-14B
-```
-
-### Qwen3-32B
-
-Qwen3-32B's BF16 weights (~63 GB) need a single large-VRAM GPU
-(GH200/H200 class).
-
-```bash
-huggingface-cli download Qwen/Qwen3-32B --local-dir models/Qwen3-32B
-
-cargo run --release -- --model-path models/Qwen3-32B
 ```
 
 Tool calling goes through `/v1/chat/completions` with a `tools` array; a
@@ -412,14 +379,15 @@ cargo run --release -- \
 At 16k, the tiering picture is: HBM hit about 26 ms, host-tier restore
 about 126 ms, cold prefill about 1.14 s.
 
-### DSpark Speculative Decoding
+### DFlash and DSpark Speculative Decoding
 
-[DSpark](https://huggingface.co/deepseek-ai/dspark_qwen3_4b_block7)
-(DeepSeek-AI, Jun 2026) adds a semi-autoregressive Markov head to a DFlash
-parallel drafter, raising accepted draft length by conditioning each block
-position on the previously sampled token. pegainfer supports it behind
-`--dflash-draft-model-path` — the drafter checkpoint goes in, the target
-model serves as-is, and greedy verify keeps output lossless.
+Qwen3-4B supports both drafter formats through
+`--dflash-draft-model-path`: [DFlash](https://huggingface.co/deepseek-ai/dflash_qwen3_4b_block7)
+proposes each block in parallel, while
+[DSpark](https://huggingface.co/deepseek-ai/dspark_qwen3_4b_block7) adds a
+Markov head that conditions each later proposal on the preceding sampled token.
+The target model remains unchanged. The example below uses DSpark; a DFlash
+checkpoint uses the same command and flag.
 
 ```bash
 # Download the released DSpark block7 drafter
@@ -432,10 +400,10 @@ cargo run --release -- \
   --dflash-draft-model-path models/dspark_qwen3_4b_block7
 ```
 
-Single-stream TPOT drops from 5.8 ms to 3.0 ms — roughly 2× decode
-speedup from amortizing target forwards over accepted drafts. Concurrency
-sweep on the same RTX 5090 setup as the engine comparison above, greedy,
-sharegpt + SPEED-Bench (coding) datasets:
+In the measured greedy run, single-stream TPOT drops from 5.8 ms to 3.0 ms —
+roughly 2× decode speedup from amortizing target forwards over accepted drafts.
+Concurrency sweep on the same RTX 5090 setup as the engine comparison above,
+greedy, sharegpt + SPEED-Bench (coding) datasets:
 
 **ShareGPT:**
 
@@ -453,10 +421,9 @@ sharegpt + SPEED-Bench (coding) datasets:
 
 DSpark gains 2.2× throughput on ShareGPT and 1.7–1.9× on coding, roughly halving TPOT on both.
 
-DFlash (the non-Markov predecessor,
-[`dflash_qwen3_4b_block7`](https://huggingface.co/deepseek-ai/dflash_qwen3_4b_block7))
-is also supported via the same flag with a DFlash-format drafter checkpoint.
-DSpark is the recommended drafter for Qwen3-4B.
+For greedy requests, verify commits only target-agreed tokens. Sampled requests
+are also supported: the regular target sampler selects each verify row, and
+accepted drafts preserve that target distribution.
 
 ## Architecture Notes
 
@@ -468,5 +435,6 @@ DSpark is the recommended drafter for Qwen3-4B.
   `--kv-offload`.
 - CUDA Graph decode uses pre-allocated buffers and can be disabled with
   `--cuda-graph=false` for debugging.
-- DSpark/DFlash speculative decoding is single-GPU, greedy-only, and forces
-  prefix caching off (the drafter needs clean target hidden states).
+- DFlash/DSpark speculative decoding is single-GPU, supports greedy and sampled
+  requests, and forces prefix caching off because the drafter needs clean target
+  hidden states. It cannot be combined with KV offload or LoRA.
