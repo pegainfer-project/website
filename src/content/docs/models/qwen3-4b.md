@@ -379,6 +379,8 @@ cargo run --release -- \
 At 16k, the tiering picture is: HBM hit about 26 ms, host-tier restore
 about 126 ms, cold prefill about 1.14 s.
 
+<a id="dspark-speculative-decoding"></a>
+
 ### DFlash and DSpark Speculative Decoding
 
 Qwen3-4B supports both drafter formats through

@@ -52,6 +52,28 @@ describe('static build output', () => {
 		assert.match(html, /starlight|pegainfer/i);
 	});
 
+	it('Qwen3 documents both speculative drafter formats and keeps stable anchors', () => {
+		const modelPage = readFileSync(join(distDir, 'models/qwen3-4b/index.html'), 'utf8');
+		assert.match(modelPage, /id="dflash-and-dspark-speculative-decoding"/);
+		assert.match(modelPage, /id="dspark-speculative-decoding"/);
+		assert.match(
+			modelPage,
+			/href="https:\/\/huggingface\.co\/deepseek-ai\/dflash_qwen3_4b_block7"/,
+		);
+		assert.match(
+			modelPage,
+			/href="https:\/\/huggingface\.co\/deepseek-ai\/dspark_qwen3_4b_block7"/,
+		);
+		assert.match(modelPage, /supports greedy and sampled/);
+		assert.doesNotMatch(modelPage, /greedy-only/);
+
+		const blogPage = readFileSync(join(distDir, 'blog/speculative-decoding/index.html'), 'utf8');
+		assert.match(
+			blogPage,
+			/href="https:\/\/open-infer\.org\/models\/qwen3-4b\/#dflash-and-dspark-speculative-decoding"/,
+		);
+	});
+
 	it('homepage has website social metadata and SoftwareApplication structured data', () => {
 		const html = readFileSync(join(distDir, 'index.html'), 'utf8');
 		assert.match(html, /property="og:type" content="website"/);

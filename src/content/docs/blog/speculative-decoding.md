@@ -8,7 +8,7 @@ authors:
 seoImage: /blog/speculative-decoding/cover.webp
 ---
 
-We have already supported DFlash and DSpark speculative decoding on [PegaInfer](https://open-infer.org/models/qwen3-4b/#dspark-speculative-decoding) Qwen3-4B. In a ShareGPT test on a single RTX 5090, DSpark increased single-stream throughput from 170 to 381 token/s, and reduced TPOT from 5.83 ms to 2.96 ms. When concurrency is 4, throughput also increased from 576 to 1288 token/s, while keeping the output lossless.
+We have already supported DFlash and DSpark speculative decoding on [PegaInfer](https://open-infer.org/models/qwen3-4b/#dflash-and-dspark-speculative-decoding) Qwen3-4B. In a ShareGPT test on a single RTX 5090, DSpark increased single-stream throughput from 170 to 381 token/s, and reduced TPOT from 5.83 ms to 2.96 ms. When concurrency is 4, throughput also increased from 576 to 1288 token/s, while keeping the output lossless.
 
 This article will break down speculative decoding itself: how a draft model is trained, why neither draft nor verify is better when it is longer, and how the latest DSpark does dynamic verify.
 
