@@ -18,7 +18,7 @@ A from-scratch LLM inference engine in pure Rust + CUDA. OpenAI-compatible. Serv
 ## Highlights
 
 - **No Python at runtime** — no PyTorch, no ONNX, no framework in the serving path.
-- **Model lines from 4B dense to trillion-parameter MoE** — Qwen3 through Kimi-K2 and GLM-5.2, one engine each.
+- **Dense models from 0.6B to 32B, plus trillion-parameter MoEs** — Qwen3 through Kimi-K2 and GLM-5.2, one engine each.
 - **Multi-node expert parallelism and P/D disaggregation** for large MoE deployments.
 - **OpenAI-compatible API** — point any SDK at `http://localhost:8000/v1`.
 
@@ -84,7 +84,7 @@ Decode is captured as a CUDA graph with pre-allocated buffers, keeping per-token
 | Model | Architecture |
 | --- | --- |
 | [Qwen3-4B / 8B / 32B](/models/qwen3-4b/) | Full attention, tensor parallel |
-| Qwen3.5-4B | Hybrid: 24 linear + 8 full attention layers |
+| [Qwen3.5 Dense](/models/qwen35/) | Hybrid: 3:1 linear + full attention layers |
 | DeepSeek-V4 | MoE + compressor + indexer, 8-GPU |
 | DeepSeek-V2-Lite | MoE + expert parallelism, 2-GPU |
 | Kimi-K2 | MLA + MoE + Marlin INT4, 8-GPU expert parallelism |
