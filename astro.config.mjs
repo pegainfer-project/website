@@ -121,6 +121,7 @@ export default defineConfig({
 						{ label: 'Qwen3-4B / 8B / 32B', link: '/models/qwen3-4b/' },
 						{ label: 'Qwen3.5-4B / 9B / 27B', link: '/models/qwen35/' },
 						{ label: 'GLM-5.2', link: '/models/glm52/' },
+						{ label: 'Gemma 4 12B', link: '/models/gemma4/' },
 					],
 				},
 			],
