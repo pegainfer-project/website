@@ -1,6 +1,6 @@
 ---
 title: Gemma 4
-description: "Running Gemma 4 on pegainfer: the 12B dense line and the 26B-A4B routed line, build with the gemma4 feature, launch, the memory envelope a slot count buys, long-context profiles, and heterogeneous attention notes."
+description: "Running Gemma 4 on pegainfer: the 12B and 31B dense lines and the 26B-A4B routed line, build with the gemma4 feature, launch, the memory envelope a slot count buys, long-context profiles, and heterogeneous attention notes."
 tableOfContents:
   minHeadingLevel: 2
   maxHeadingLevel: 3
