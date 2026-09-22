@@ -210,7 +210,7 @@ Checkpoint `google/gemma-4-31B-it`, BF16 weights and KV on both engines. pegainf
 
 Round-to-round spread is at most 0.8%, so every paired delta sits outside it, including the shortest prompt.
 
-pegainfer serves this checkpoint in three states one flag apart. The figure and the table are the folded-pool one. The default state is the numerical reference rather than the fast path, and it trails vLLM by 8% at the shortest prompt to 35% at the longest on the same cells.
+pegainfer serves this checkpoint in three states one flag apart. The figure and the table are the folded-pool state, which is the one to serve on; the default state is the numerical reference the other two are checked against.
 
 Peak GPU memory, sampled every 500 ms, was 77,886 MiB against vLLM's 97,104 MiB. vLLM's number is what its 0.96 utilization setting reserves up front, not what it actually used.
 
@@ -271,4 +271,3 @@ Decode steps run at power-of-two batch sizes and replay as CUDA graphs captured 
 - **KV capacity is not reported to the frontend**, so its capacity metrics stay empty for this model.
 - **26B-A4B serves the NVFP4 checkpoint only.** BF16 experts are not served.
 - **Text only.** Multimodal inputs are not supported, and the checkpoints' vision tower is skipped at load.
-- 31B is on the roadmap, not served today.
