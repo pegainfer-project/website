@@ -222,21 +222,35 @@ The section above is one request at a time. This one is the same card and the sa
 
 *Fixed concurrency, both engines driven by vLLM's bench serve client. Mean of two interleaved rounds, which agreed to better than a per cent at every level.*
 
-| c | tok/s pegainfer | tok/s vLLM | Δ | TTFT p50 pegainfer | vLLM | Δ | TTFT p99 pegainfer | vLLM | Δ |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | 50.2 | 47.9 | +4.6% | 122 ms | 124 ms | −1.5% | 124 ms | 126 ms | −1.5% |
-| 2 | 96.0 | 92.3 | +4.1% | 162 ms | 197 ms | −18.0% | 259 ms | 247 ms | +4.8% |
-| 4 | 178.1 | 172.8 | +3.1% | 393 ms | 467 ms | −15.8% | 489 ms | 471 ms | +3.8% |
-| 8 | 310.8 | 309.4 | +0.4% | 730 ms | 901 ms | −19.0% | 930 ms | 905 ms | +2.7% |
-| 16 | 497.6 | 498.2 | −0.1% | 955 ms | 1364 ms | −29.9% | 1824 ms | 1835 ms | −0.6% |
+**Throughput and time per output token.**
 
-| c | E2EL p50 pegainfer | vLLM | Δ | E2EL p99 pegainfer | vLLM | Δ | TPOT p99 pegainfer | vLLM | Δ |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | 5,105 ms | 5,341 ms | −4.4% | 5,107 ms | 5,344 ms | −4.4% | 19.54 ms | 20.47 ms | −4.5% |
-| 2 | 5,326 ms | 5,546 ms | −4.0% | 5,436 ms | 5,550 ms | −2.1% | 20.30 ms | 21.20 ms | −4.2% |
-| 4 | 5,746 ms | 5,925 ms | −3.0% | 5,858 ms | 5,929 ms | −1.2% | 21.89 ms | 22.69 ms | −3.6% |
-| 8 | 6,582 ms | 6,620 ms | −0.6% | 6,695 ms | 6,624 ms | +1.1% | 25.15 ms | 25.40 ms | −1.0% |
-| 16 | 8,219 ms | 8,198 ms | +0.3% | 8,611 ms | 8,285 ms | +3.9% | 31.53 ms | 31.61 ms | −0.2% |
+| c | tok/s pegainfer | tok/s vLLM | Δ | TPOT p99 pegainfer | TPOT p99 vLLM | Δ |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 50.2 | 47.9 | +4.6% | 19.54 ms | 20.47 ms | −4.5% |
+| 2 | 96.0 | 92.3 | +4.1% | 20.30 ms | 21.20 ms | −4.2% |
+| 4 | 178.1 | 172.8 | +3.1% | 21.89 ms | 22.69 ms | −3.6% |
+| 8 | 310.8 | 309.4 | +0.4% | 25.15 ms | 25.40 ms | −1.0% |
+| 16 | 497.6 | 498.2 | −0.1% | 31.53 ms | 31.61 ms | −0.2% |
+
+**Time to first token**, the two series the figure plots.
+
+| c | p50 pegainfer | p50 vLLM | Δ | p99 pegainfer | p99 vLLM | Δ |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 122 ms | 124 ms | −1.5% | 124 ms | 126 ms | −1.5% |
+| 2 | 162 ms | 197 ms | −18.0% | 259 ms | 247 ms | +4.8% |
+| 4 | 393 ms | 467 ms | −15.8% | 489 ms | 471 ms | +3.8% |
+| 8 | 730 ms | 901 ms | −19.0% | 930 ms | 905 ms | +2.7% |
+| 16 | 955 ms | 1364 ms | −29.9% | 1824 ms | 1835 ms | −0.6% |
+
+**End-to-end latency.**
+
+| c | p50 pegainfer | p50 vLLM | Δ | p99 pegainfer | p99 vLLM | Δ |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 5,105 ms | 5,341 ms | −4.4% | 5,107 ms | 5,344 ms | −4.4% |
+| 2 | 5,326 ms | 5,546 ms | −4.0% | 5,436 ms | 5,550 ms | −2.1% |
+| 4 | 5,746 ms | 5,925 ms | −3.0% | 5,858 ms | 5,929 ms | −1.2% |
+| 8 | 6,582 ms | 6,620 ms | −0.6% | 6,695 ms | 6,624 ms | +1.1% |
+| 16 | 8,219 ms | 8,198 ms | +0.3% | 8,611 ms | 8,285 ms | +3.9% |
 
 The median time to first token is what moves. Throughput leads by three to five per cent up to four concurrent requests and is level from eight on, which is what a saturated card looks like. The first-token tail stays within five per cent either way at every level; at sixteen it is 1,824 ms against 1,835 ms, a difference the size of this cell's own round-to-round variation, so read that as level rather than as a lead.
 
