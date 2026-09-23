@@ -7,6 +7,7 @@ description: Release notes, benchmarks, runtime design notes, and model bring-up
 
 | Date | Post | Summary |
 | --- | --- | --- |
+| 2026-09-23 | [Is What CUDA Graph Saves Really Launch Time?](/blog/cuda-graph-launch-time/) | Where the gains actually come from on an agent-era short prefill workload: host launch cost, the GPU kernel-to-kernel bubble, and why Python engines are limited by glue code and the GIL. |
 | 2026-07-28 | [The Fastest H2D Path Wasn’t the Fastest Weight Loader](/blog/weight-loading/) | Safetensors index addressing, TP/FP8/EP sharding, two-slot pinned staging, and a startup-time comparison with vLLM. |
 | 2026-07-17 | [Speculative Decoding](/blog/speculative-decoding/) | From output entropy and verification correctness to EAGLE draft models and dynamic verify length. |
 | 2026-07-10 | [See Qwen3 Decode as a CUDA Graph](/blog/cuda-graph-export/) | One flag exports a detailed DOT for LLMs and a folded high-resolution PNG for people. |
