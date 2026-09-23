@@ -1,6 +1,6 @@
 ---
 title: Gemma 4
-description: "Running Gemma 4 on pegainfer: the 12B dense line and the 26B-A4B routed line, build with the gemma4 feature, launch, the memory envelope a slot count buys, long-context profiles, and heterogeneous attention notes."
+description: "Running Gemma 4 on pegainfer: the 12B and 31B dense lines and the 26B-A4B routed line, build with the gemma4 feature, launch, the memory envelope a slot count buys, long-context profiles, and heterogeneous attention notes."
 tableOfContents:
   minHeadingLevel: 2
   maxHeadingLevel: 3
@@ -126,7 +126,7 @@ PEGAINFER_MAX_CONTEXT=262144 PEGAINFER_MIX_CHUNK_TOKENS=2496 PEGAINFER_DECODE_SL
 
 ## Performance
 
-Both lines were measured against vLLM 0.23.1rc1 on the same card. vLLM's own `vllm bench serve` client drove both engines, so the metric definitions, the percentile maths and the request pacing are vLLM's code, used the same way on both sides.
+The 12B and 26B lines were measured against vLLM 0.23.1rc1 on the same card; the 31B line ran later on a different machine against a newer vLLM, and carries its own pins. In all three, vLLM's own `vllm bench serve` client drove both engines, so the metric definitions, the percentile maths and the request pacing are vLLM's code, used the same way on both sides.
 
 Single GPU (sm_89, x86_64), 49,140 MiB, driver 570.211.01, CUDA 12.9.
 
@@ -191,13 +191,80 @@ pegainfer's numbers are the same in both tables; the difference between them is 
 
 Peak GPU memory, sampled every 100 ms, was 29,917 MiB against vLLM's 45,641 MiB. vLLM's number is what its 0.92 utilization setting reserves up front, not what it actually used.
 
+### 31B against vLLM
+
+A different machine, and read it before comparing these numbers with the two above. The 12B and 26B lines ran on the sm_89 card, where vLLM's configuration layer selects its Triton attention backend for Gemma 4's head dimensions. This line ran on **1x GH200 120GB** (aarch64, sm_90), driver 565.57.01, where the same engine picks FlashAttention. The leads here are smaller, and the card and that backend are two of the reasons; we did not separate them.
+
+Checkpoint `google/gemma-4-31B-it`, BF16 weights and KV on both engines. pegainfer `69692ba3` with `PEGAINFER_GLOBAL_ATTN=tilelang640`, the folded-pool state; vLLM is a source build reporting `0.1.dev1+g2cf0a6915`. Both engines at a 165,888-token ceiling with vLLM's own 8,192-token prefill chunk, one request in flight and one decode slot, vLLM at `--gpu-memory-utilization 0.96`. Four rounds with the boot order rotating, one discarded warm-up per length per boot then three kept, 12 per point.
+
+![Time to first token and time per output token versus prompt length, pegainfer against vLLM on one GH200, at 10.6K / 40K / 81.7K / 163K prompt tokens](/models/gemma4/perf-31b.svg)
+
+*One request in flight, four prompt lengths, BF16 KV on both engines. Medians of four interleaved rounds, 12 kept requests per point.*
+
+| prompt tokens | E2EL pegainfer | E2EL vLLM | E2EL Δ | paired Δ TTFT | paired Δ TPOT | paired Δ E2EL |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10,602 | 6.39 s | 6.64 s | −3.8% | −1.3 … −2.2% | −4.2 … −4.4% | −3.7 … −3.9% |
+| 40,002 | 11.29 s | 12.05 s | −6.3% | −8.2 … −8.4% | −3.7 … −4.1% | −6.2 … −6.4% |
+| 81,653 | 20.82 s | 23.20 s | −10.3% | −12.2 … −12.5% | −3.9 … −4.3% | −10.2 … −10.4% |
+| 163,336 | 47.99 s | 56.86 s | −15.6% | −16.9 … −17.0% | −4.1 … −4.5% | −15.6 … −15.7% |
+
+Round-to-round spread is at most 0.8%, so every paired delta sits outside it, including the shortest prompt.
+
+pegainfer serves this checkpoint in three states one flag apart. The figure and the table are the folded-pool state, which is the one to serve on; the default state is the numerical reference the other two are checked against.
+
+Peak GPU memory, sampled every 500 ms, was 77,886 MiB against vLLM's 97,104 MiB. vLLM's number is what its 0.96 utilization setting reserves up front, not what it actually used.
+
+### 31B at fixed concurrency
+
+The section above is one request at a time. This one is the same card and the same vLLM build with the requests arriving together: 1, 2, 4, 8 and 16 at once, random 1024-token prompts, 256 tokens out. pegainfer `e7786a48`, still on the folded-pool state, with the admission gather set to take a burst in one step: `PEGAINFER_MIX_GATHER_ROWS=8192`, `PEGAINFER_MIX_MAX_PROMPTS=8`, `PEGAINFER_MIX_CHUNK_TOKENS=6144`. Both engines at an 8,192-token ceiling and 16 sequences, vLLM at `--gpu-memory-utilization 0.90`. Two rounds in opposite boot order, `max(8, 4c)` requests per level, a discarded warm-up burst after each boot. Every request returned its full 256 tokens.
+
+![Median and 99th-percentile time to first token versus concurrency, pegainfer against vLLM on one GH200, at 1, 2, 4, 8 and 16 concurrent requests](/models/gemma4/perf-31b-concurrency.svg)
+
+*Fixed concurrency, both engines driven by vLLM's bench serve client. Mean of two interleaved rounds, which agreed to better than a per cent at every level.*
+
+**Throughput and time per output token.**
+
+| c | tok/s pegainfer | tok/s vLLM | Δ | TPOT p99 pegainfer | TPOT p99 vLLM | Δ |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 50.2 | 47.9 | +4.6% | 19.54 ms | 20.47 ms | −4.5% |
+| 2 | 96.0 | 92.3 | +4.1% | 20.30 ms | 21.20 ms | −4.2% |
+| 4 | 178.1 | 172.8 | +3.1% | 21.89 ms | 22.69 ms | −3.6% |
+| 8 | 310.8 | 309.4 | +0.4% | 25.15 ms | 25.40 ms | −1.0% |
+| 16 | 497.6 | 498.2 | −0.1% | 31.53 ms | 31.61 ms | −0.2% |
+
+**Time to first token**, the two series the figure plots.
+
+| c | p50 pegainfer | p50 vLLM | Δ | p99 pegainfer | p99 vLLM | Δ |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 122 ms | 124 ms | −1.5% | 124 ms | 126 ms | −1.5% |
+| 2 | 162 ms | 197 ms | −18.0% | 259 ms | 247 ms | +4.8% |
+| 4 | 393 ms | 467 ms | −15.8% | 489 ms | 471 ms | +3.8% |
+| 8 | 730 ms | 901 ms | −19.0% | 930 ms | 905 ms | +2.7% |
+| 16 | 955 ms | 1364 ms | −29.9% | 1824 ms | 1835 ms | −0.6% |
+
+**End-to-end latency.**
+
+| c | p50 pegainfer | p50 vLLM | Δ | p99 pegainfer | p99 vLLM | Δ |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 5,105 ms | 5,341 ms | −4.4% | 5,107 ms | 5,344 ms | −4.4% |
+| 2 | 5,326 ms | 5,546 ms | −4.0% | 5,436 ms | 5,550 ms | −2.1% |
+| 4 | 5,746 ms | 5,925 ms | −3.0% | 5,858 ms | 5,929 ms | −1.2% |
+| 8 | 6,582 ms | 6,620 ms | −0.6% | 6,695 ms | 6,624 ms | +1.1% |
+| 16 | 8,219 ms | 8,198 ms | +0.3% | 8,611 ms | 8,285 ms | +3.9% |
+
+The median time to first token is what moves. Throughput leads by three to five per cent up to four concurrent requests and is level from eight on, which is what a saturated card looks like. The first-token tail stays within five per cent either way at every level; at sixteen it is 1,824 ms against 1,835 ms, a difference the size of this cell's own round-to-round variation, so read that as level rather than as a lead.
+
+At one, two and four requests the reported p99 is the largest of 8 or 16 samples rather than a percentile. The c = 8 and c = 16 tails are the ones to read.
+
+Peak GPU memory was 86,503 MiB against 89,607 MiB.
+
 ### Caveats
 
-Part of the gap at long prompts comes from the kernels, not from the engines as a whole. vLLM serves both checkpoints through its Triton attention backend, which its configuration layer selects because FlashAttention does not cover Gemma 4's two head dimensions in this version. pegainfer has kernels written for those two dimensions. On the routed line vLLM also decompresses the experts through its Marlin NvFp4 path, because the card has no native FP4; pegainfer's expert GEMM is a Marlin path too. So the deeper points compare what each engine ships for these models today, not two implementations of the same kernel, and we did not measure how much of the gap that accounts for.
+Part of the gap at long prompts comes from the kernels, not from the engines as a whole. On the sm_89 card vLLM serves both checkpoints through its Triton attention backend, which its configuration layer selects because FlashAttention does not cover Gemma 4's two head dimensions in this version; on the GH200 it picks FlashAttention, which is part of why the 31B leads are the smallest of the three. pegainfer has kernels written for those two dimensions. On the routed line vLLM also decompresses the experts through its Marlin NvFp4 path, because the card has no native FP4; pegainfer's expert GEMM is a Marlin path too. So the deeper points compare what each engine ships for these models today, not two implementations of the same kernel, and we did not measure how much of the gap that accounts for.
 
 The two engines also get here differently. vLLM covers 262,144 positions out of the box, while pegainfer refuses a prompt this long until someone sets the profile above. That extra setup is on pegainfer's side. Within that profile, the one setting we could have picked in our own favour is the prefill chunk width, and we used vLLM's.
 
-These numbers say nothing about throughput under concurrency, multi-turn workloads, accuracy, or prompt lengths other than these four. Both engines were configured for the full 262,144-token context, but the longest prompt actually run is 163,336. One machine, one operator.
+These numbers say nothing about multi-turn workloads, accuracy, prompt lengths other than these four, or concurrency above sixteen. Both engines were configured for the full 262,144-token context, but the longest prompt actually run is 163,336. One machine, one operator.
 
 ## Reproducibility under concurrency
 
@@ -248,4 +315,3 @@ Decode steps run at power-of-two batch sizes and replay as CUDA graphs captured 
 - **KV capacity is not reported to the frontend**, so its capacity metrics stay empty for this model.
 - **26B-A4B serves the NVFP4 checkpoint only.** BF16 experts are not served.
 - **Text only.** Multimodal inputs are not supported, and the checkpoints' vision tower is skipped at load.
-- 31B is on the roadmap, not served today.
