@@ -10,6 +10,8 @@ seoImage: /blog/cuda-graph-launch-time/ttft-short-prefill.png
 
 *Jinyang Su · September 23, 2026*
 
+Kern: [github.com/pegainfer-project/kern](https://github.com/pegainfer-project/kern)
+
 ## TL;DR
 
 The gain from CUDA Graph does not mainly come from "saving kernel launch time."
