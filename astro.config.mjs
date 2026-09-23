@@ -94,6 +94,10 @@ export default defineConfig({
 					items: [
 						{ label: 'All Posts', link: '/blog/' },
 						{
+							label: 'Is CUDA Graph Saving Launch Time?',
+							link: '/blog/cuda-graph-launch-time/',
+						},
+						{
 							label: 'Weight Loading: From Safetensors to GPU',
 							link: '/blog/weight-loading/',
 						},
